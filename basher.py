@@ -84,6 +84,7 @@ def run_bash(cmd):
         for line in stream:
             with g_lock:
                 parts_list.append(line)
+                print(line, flush=True, end="")
         stream.close()
 
     stdout_thread = threading.Thread(
@@ -132,7 +133,7 @@ def run_bash(cmd):
     result += "STDERR:\n"
     result += stderr_display if stderr_display else "(no output)\n"
     result += "\n" + "=" * 25 + " END OF STDERR " + "=" * 25 + "\n"
-
+    print()
     return result
 
 
@@ -153,6 +154,7 @@ def main():
     add_user_content(" ".join(sys.argv[1:]))
     while True:
         res = run_llm(g_ctx)
+        print()
         if "<finish />" in res:
             exit(0)
         cmd, err = extract_bash_cmd(res)
@@ -162,7 +164,6 @@ def main():
         else:
             res = run_bash(cmd)
             if res is not None:
-                print(res)
                 add_user_content(res + "\n\nWhat do we need to do next?")
 
 
