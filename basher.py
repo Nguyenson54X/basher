@@ -188,7 +188,6 @@ echo 'ping end'
 </bash>
 
 [User]: Bash execution completed with return code: 0.
-
 ==================================================
 STDOUT:
 xxxxx
@@ -232,19 +231,25 @@ files, write files, and modify files.
 
 Reading files is a prerequisite for all operations.
 
-*   **View a specific range of a file (e.g., lines 100 to 200):**
+*   **View a specific range of a file (e.g., lines 100 to 200):** (with line number)
 
     <bash>
-    sed -n '100,200p' path/to/file.txt
+    cat -n path/to/file.txt | sed -n '100,200p'
     </bash>
 
 *   **View the beginning and end of a file:**
 
     <bash>
     head -n 50 file.txt
+    echo
     echo '---'
+    echo
     tail -n 50 file.txt
     </bash>
+
+**Note (Important):** Some files can be really long. So you **should not** read 
+files at once using `cat`. You should compose `cat` and `sed` to read at most 
+200 lines each time.
 
 ### 3. Write Files
 
@@ -272,7 +277,7 @@ then Patch" workflow:
 *   **Example: Modifying a section of code in `app.py`:**
 
 Assuming we have already read the file, first write the difference to a temporary 
-file `diff.patch`:
+file.
 
     <bash>
     patchfile=$(mktemp)
