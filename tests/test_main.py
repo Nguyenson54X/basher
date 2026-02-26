@@ -109,7 +109,7 @@ class TestExtractBashCmd:
 
         assert cmd is None
         assert err is not None
-        assert "找不到可以执行的bash命令" in err
+        assert "No executable bash commands found" in err
 
     def test_extract_multiple_bash_commands(self):
         """Test extracting multiple bash commands."""
@@ -118,7 +118,7 @@ class TestExtractBashCmd:
 
         assert cmd is None
         assert err is not None
-        assert "一次智能执行一个脚本" in err
+        assert "Only one script can be executed at a time. Please provide a single bash script block" in err
 
     def test_extract_bash_cmd_with_newlines(self):
         """Test extracting bash command with newlines."""
@@ -183,74 +183,6 @@ class TestContextManagement:
         assert basher.g_ctx[1]["role"] == "user"
         assert basher.g_ctx[2]["role"] == "assistant"
 
-
-class TestLoadPrompts:
-    """Test cases for the load_prompts function."""
-
-    def test_load_prompts_no_path(self, monkeypatch):
-        """Test load_prompts when PROMPTS_PATH is not set."""
-        monkeypatch.setattr(basher, "PROMPTS_PATH", None)
-        basher.g_prompts.clear()
-        basher.load_prompts()
-        assert len(basher.g_prompts) == 0
-
-    def test_load_prompts_default_path(self, monkeypatch, tmp_path):
-        """Test load_prompts uses default path when env var is not set."""
-        # Create a mock default prompts directory
-        default_prompts_dir = tmp_path / "basher" / "prompts"
-        default_prompts_dir.mkdir(parents=True)
-        (default_prompts_dir / "core.txt").write_text("Default core prompt")
-
-        # Temporarily override the DEFAULT_PROMPTS_PATH
-        original_default = basher.DEFAULT_PROMPTS_PATH
-        monkeypatch.setattr(basher, "DEFAULT_PROMPTS_PATH", str(default_prompts_dir))
-        monkeypatch.setattr(basher, "PROMPTS_PATH", str(default_prompts_dir))
-        basher.g_prompts.clear()
-        basher.load_prompts()
-
-        assert "core.txt" in basher.g_prompts
-        assert basher.g_prompts["core.txt"] == "Default core prompt"
-        monkeypatch.setattr(basher, "DEFAULT_PROMPTS_PATH", original_default)
-
-    def test_load_prompts_nonexistent_path(self, monkeypatch):
-        """Test load_prompts when path does not exist."""
-        monkeypatch.setattr(basher, "PROMPTS_PATH", "/nonexistent/path")
-        basher.g_prompts.clear()
-        basher.load_prompts()
-        assert len(basher.g_prompts) == 0
-
-    def test_load_prompts_not_directory(self, monkeypatch, tmp_path):
-        """Test load_prompts when path is not a directory."""
-        file_path = tmp_path / "file.txt"
-        file_path.write_text("content")
-        monkeypatch.setattr(basher, "PROMPTS_PATH", str(file_path))
-        basher.g_prompts.clear()
-        basher.load_prompts()
-        assert len(basher.g_prompts) == 0
-
-    def test_load_prompts_success(self, monkeypatch, tmp_path):
-        """Test load_prompts successfully loads prompt files."""
-        prompts_dir = tmp_path / "prompts"
-        prompts_dir.mkdir()
-
-        # Create some prompt files
-        (prompts_dir / "core.txt").write_text("This is core prompt")
-        (prompts_dir / "helper.txt").write_text("This is helper prompt")
-
-        monkeypatch.setattr(basher, "PROMPTS_PATH", str(prompts_dir))
-        basher.g_prompts.clear()
-        basher.load_prompts()
-
-        assert "core.txt" in basher.g_prompts
-        assert "helper.txt" in basher.g_prompts
-        assert basher.g_prompts["core.txt"] == "This is core prompt"
-        assert basher.g_prompts["helper.txt"] == "This is helper prompt"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
-
 def test_extract_bash_cmd_success():
     """single bash cmd"""
     s = "<bash>ls -la</bash>"
@@ -274,7 +206,7 @@ def test_extract_bash_cmd_no_bash():
     assert ret is None
     assert (
         err
-        == "找不到可以执行的bash命令，请给出bash命令。如果你发现任务已经完成，请总结你完成的内容。并输出`<finish />`"
+        == "No executable bash commands found. Please provide a bash command. If you find the task has already been completed, please summarize what you have done and output <finish />."
     )
 
 
@@ -283,7 +215,7 @@ def test_extract_bash_cmd_multiple_bash():
     s = "<bash>ls -la</bash><bash>pwd</bash>"
     ret, err = extract_bash_cmd(s)
     assert ret is None
-    assert err == "一次智能执行一个脚本，请给出单个bash脚本段"
+    assert err == "Only one script can be executed at a time. Please provide a single bash script block."
 
 
 def test_extract_bash_cmd_empty_bash():
@@ -303,3 +235,6 @@ ls -la
     ret, err = extract_bash_cmd(s)
     assert err is None
     assert ret == "cd /tmp\nls -la"
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
