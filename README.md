@@ -1,6 +1,6 @@
 # Basher
 
-Basher is a CLI AI Agent that interacts with the OpenAI model for executing and generating responses based on user input.
+Basher is a CLI AI Agent that interacts with the OpenAI-compatible LLM API for executing coding tasks.
 
 ## Installation
 
@@ -12,13 +12,15 @@ pip install openai
 
 ## Usage
 
+First, you can create an `AGENTS.md` as context file.
+
 To run Basher, you'll need to set a few environment variables prior to execution:
 
 ### Environment Variables
 
 - `BASHER_API_ENDPOINT`: (optional) The API endpoint for the OpenAI-compatible LLM service. Default is `https://openrouter.ai/api/v1/`.
 - `BASHER_API_KEY`: (required) Your API key for authenticating with the LLM service.
-- `BASHER_MODEL`: (optional) The model to use for interaction. Default is `openai/gpt-4o-mini`.
+- `BASHER_MODEL`: (optional) The model to use for interaction. Default is `moonshotai/kimi-k2.5`.
 
 ### Command Line Arguments
 
@@ -28,6 +30,8 @@ You can run the Basher CLI from your terminal like this:
 export BASHER_API_KEY='your_api_key_here'
 python basher.py 'finish the coding task described in `TASK.md`'
 ```
+
+Then the agents will start running. Running coding agents without protection is dangerous. Make sure you are running in a sanbox.
 
 ## License
 
