@@ -37,14 +37,21 @@ xxxxx
 *   **按名称查找文件：**
 
     <bash>
-    find . -name "*.py"
+    fd '.*.py'
     </bash>
 
 *   **在文件中递归搜索字符串：**
 
     <bash>
-    grep -rn "target_function_name" .
+    rg "target_function_name" .
     </bash>
+
+**注意（重要）**：
+
+项目规模可能非常大，请**不要**直接使用 find . 或全局 grep。
+请优先使用能自动过滤 .gitignore 的工具（如 fd 或 rg）。
+除非特殊情况，否则**不要**用'fd -H'列举隐藏文件
+使用`fd`时，同时务必配合 --max-depth,或者pipe到head来限制输出。
 
 ### 2. 阅读文件 (Read)
 
