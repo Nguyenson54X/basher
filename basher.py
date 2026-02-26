@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import time
 import subprocess
 import sys
 import tempfile
@@ -70,6 +71,10 @@ def run_bash(cmd):
         f.write("set -euo pipefail\n")
         f.write(cmd)
         temp_script_path = f.name
+    start_time = time.time()
+    last_ai_check_time = start_time
+    timeout_interval = 60  # 60 seconds
+
     process = subprocess.Popen(
         ["bash", temp_script_path],
         stdout=subprocess.PIPE,
@@ -77,27 +82,68 @@ def run_bash(cmd):
         text=True,
     )
 
-    stdout_parts = []
-    stderr_parts = []
-
-    def read_stream(stream, parts_list):
+    output_parts = []
+    def read_stream(stream):
         for line in stream:
             with g_lock:
-                parts_list.append(line)
+                output_parts.append(line)
                 print(line, flush=True, end="")
         stream.close()
 
     stdout_thread = threading.Thread(
-        target=read_stream, args=(process.stdout, stdout_parts)
+        target=read_stream, args=(process.stdout,)
     )
     stderr_thread = threading.Thread(
-        target=read_stream, args=(process.stderr, stderr_parts)
+        target=read_stream, args=(process.stderr,)
     )
-
+    
     stdout_thread.start()
     stderr_thread.start()
 
-    return_code = process.wait()
+    is_killed = False
+    return_code = None
+    while return_code is None:
+        time.sleep(1)
+        return_code = process.poll()
+
+        if return_code is None and time.time() - last_ai_check_time >= timeout_interval:
+            with g_lock:
+                last_20_lines = "".join(output_parts[-20:])
+
+            question = (
+                f"The bash script has been running for {timeout_interval} seconds. "
+                f"Here is the last 20 lines of output:\n\n{last_20_lines}\n\n"
+                "Do you want to kill this process? "
+                "Reply with `<answer>YES</answer>` to kill it, or "
+                "`<answer>NO</answer>` to continue waiting for another 60 seconds."
+            )
+            add_user_content(question)
+
+            while True:
+                ai_response = run_llm(g_ctx)
+                add_ai_content(ai_response)
+
+                has_yes = "<answer>YES</answer>" in ai_response
+                has_no = "<answer>NO</answer>" in ai_response
+
+                if has_yes and has_no:
+                    add_user_content("Invalid response: Both YES and NO found. "
+                                     "Please reply with only `<answer>YES</answer>` "
+                                     "or `<answer>NO</answer>`.")
+                elif not has_yes and not has_no:
+                    add_user_content("Invalid response: Neither YES nor NO found. "
+                                     "Please reply with `<answer>YES</answer>` to "
+                                     "kill the process or `<answer>NO</answer>` "
+                                     "to continue waiting.")
+                elif has_yes:
+                    print("Process killed for timeout.", flush=True)
+                    is_killed = True
+                    process.kill()
+                    return_code = process.wait()
+                    break
+                else:
+                    last_ai_check_time = time.time()
+                    break
 
     stdout_thread.join()
     stderr_thread.join()
@@ -108,31 +154,22 @@ def run_bash(cmd):
         pass
 
     with g_lock:
-        stdout_content = "".join(stdout_parts)
-        stderr_content = "".join(stderr_parts)
-    if len(stdout_content) > MAX_OUTPUT_LENGTH:
-        stdout_display = (
+        output_content = "".join(output_parts)
+    if len(output_content) > MAX_OUTPUT_LENGTH:
+        output_display = (
             "[... output truncated due to length ...]\n"
-            + stdout_content[-MAX_OUTPUT_LENGTH:]
+            + output_content[-MAX_OUTPUT_LENGTH:]
         )
     else:
-        stdout_display = stdout_content
-    if len(stderr_content) > MAX_OUTPUT_LENGTH:
-        stderr_display = (
-            "[... output truncated due to length ...]\n"
-            + stderr_content[-MAX_OUTPUT_LENGTH:]
-        )
-    else:
-        stderr_display = stderr_content
+        output_display = output_content
 
     result = f"Bash execution completed with return code: {return_code}\n"
+    if is_killed:
+        result += "The execution didn't exit normally. It was killed.\n"
     result += "=" * 50 + "\n"
-    result += "STDOUT:\n"
-    result += stdout_display if stdout_display else "(no output)\n"
-    result += "\n" + "=" * 25 + " END OF STDOUT " + "=" * 25 + "\n"
-    result += "STDERR:\n"
-    result += stderr_display if stderr_display else "(no output)\n"
-    result += "\n" + "=" * 25 + " END OF STDERR " + "=" * 25 + "\n"
+    result += "BASH OUTPUT:\n"
+    result += output_display if output_display else "(no output)\n"
+    result += "\n" + "=" * 25 + " END OF BASH OUTPUT " + "=" * 25 + "\n"
     print(flush=True)
     return result
 
@@ -197,7 +234,7 @@ This helps maintain a clear chain of reasoning and prevents aimless exploration.
 
 ### Error Handling
 
-- If a command fails (non-zero return code), **read the STDERR carefully**
+- If a command fails (non-zero return code), **read the BASH OUTPUT carefully**
   before retrying.
 - Do NOT blindly retry the same command. Analyze the error, adjust your
   approach, then try again.
@@ -233,12 +270,9 @@ echo 'ping end'
 
 [User]: Bash execution completed with return code: 0.
 ==================================================
-STDOUT:
+BASH OUTPUT:
 xxxxx
-========================= END OF STDOUT =========================
-STDERR:
-xxxxx
-========================= END OF STDERR =========================
+========================= END OF BASH OUTPUT =========================
 
 What do we need to do next?
 
@@ -261,9 +295,9 @@ fd 'utils.py' --max-depth 3
 
 [User]: Bash execution completed with return code: 0.
 ==================================================
-STDOUT:
+BASH OUTPUT:
 src/utils.py
-========================= END OF STDOUT =========================
+========================= END OF BASH OUTPUT =========================
 
 [Assistant]: Found the file at `src/utils.py`. Now I need to find the
 `parse_date` function to understand its current implementation. I expect to see
@@ -275,9 +309,9 @@ rg -n "def parse_date" src/utils.py
 
 [User]: Bash execution completed with return code: 0.
 ==================================================
-STDOUT:
+BASH OUTPUT:
 42:def parse_date(date_str):
-========================= END OF STDOUT =========================
+========================= END OF BASH OUTPUT =========================
 
 [Assistant]: The function starts at line 42. Let me read the surrounding context
 to understand the full implementation. I'll read lines 42-60 which should cover
