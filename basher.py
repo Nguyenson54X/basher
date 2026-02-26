@@ -254,7 +254,7 @@ files at once using `cat`. You should compose `cat` and `sed` to read at most
 
 ### 3. Write Files
 
-Used to create brand new scripts or configuration files.
+Used to create brand new files.
 
 *   **Write multi-line content using EOF:**
 
@@ -287,13 +287,16 @@ file.
     +++ app.py
     @@ -10,5 +10,5 @@
         def start():
-    -    print("Starting server on port 80...")
-    +    print("Starting server on port 8080...")
+    -       print("Starting server on port 80...")
+    +       print("Starting server on port 8080...")
             setup_database()
     EOF
-    patch app.py $patchfile
+    patch --dry-run app.py $patchfile && patch app.py $patchfile
     rm $patchfile
     </bash>
+
+**Note (Important):** Always perform a dry run before applying a patch to 
+prevent file corruption in case of errors.
 
 ---
 
