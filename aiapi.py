@@ -15,7 +15,6 @@ def run_llm(prompt):
     endpoint = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/")
     api_key = os.environ.get("BASHER_API_KEY")
     model = os.environ.get("BASHER_MODEL", "openai/gpt-4o-mini")
-
     client = OpenAI(base_url=endpoint, api_key=api_key)
 
     response = client.chat.completions.create(model=model, messages=prompt, stream=True)
