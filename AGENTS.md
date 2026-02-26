@@ -1,9 +1,7 @@
-这是一个Python项目，名字叫basher
+This is a Python project, the name is `basher`.
 
-我在开发一个cli AI Agent。
+I'm developing a CLI AI Agent.
 
-测试框架用的是pytest
+The test framework is `pytest`.
 
-源代码基本上就一个文件 basher.py
-
-写代码的时候注释需要用英文写
+The main source file is `basher.py`.
