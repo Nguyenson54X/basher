@@ -9,7 +9,7 @@ from openai import OpenAI
 
 ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/")
 APIKEY = os.environ.get("BASHER_API_KEY")
-MODEL = os.environ.get("BASHER_MODEL", "openai/gpt-4o-mini")
+MODEL = os.environ.get("BASHER_MODEL", "moonshotai/kimi-k2.5")
 
 g_prompts = dict()
 g_ctx = list()
@@ -26,7 +26,7 @@ def run_llm(prompt):
             print(content, end="", flush=True)
             full_content += content
 
-    print()
+    print(flush=True)
     return full_content
 
 
@@ -133,7 +133,7 @@ def run_bash(cmd):
     result += "STDERR:\n"
     result += stderr_display if stderr_display else "(no output)\n"
     result += "\n" + "=" * 25 + " END OF STDERR " + "=" * 25 + "\n"
-    print()
+    print(flush=True)
     return result
 
 
@@ -147,14 +147,14 @@ def main():
         add_user_content("\nHere is the context infomation about this project:\n\n" + agents_content)
 
     if len(sys.argv) < 2:
-        print("Error: Please provide a task description.")
-        print("Usage: " + sys.argv[0] + " <task_description>")
+        print("Error: Please provide a task description.", flush=True)
+        print("Usage: " + sys.argv[0] + " <task_description>", flush=True)
         sys.exit(1)
 
     add_user_content(" ".join(sys.argv[1:]))
     while True:
         res = run_llm(g_ctx)
-        print()
+        print(flush=True)
         if "<finish />" in res:
             exit(0)
         cmd, err = extract_bash_cmd(res)
@@ -173,7 +173,7 @@ You are an AI Agent capable of running bash commands within this environment to
 complete the tasks assigned to you by the user.
 
 The only tool you can call is bash. The bash scripts are wrapped in a `<bash>`
-`</bash>` block. For your each output, only one <bash> block can be give.
+`</bash>` block. In each of your output, only one <bash> block can be given.
 
 here is a sample conversation.
 
@@ -238,16 +238,6 @@ Reading files is a prerequisite for all operations.
     cat -n path/to/file.txt | sed -n '100,200p'
     </bash>
 
-*   **View the beginning and end of a file:**
-
-    <bash>
-    head -n 50 file.txt
-    echo
-    echo '---'
-    echo
-    tail -n 50 file.txt
-    </bash>
-
 **Note (Important):** Some files can be really long. So you **should not** read 
 files at once using `cat`. You should compose `cat` and `sed` to read at most 
 200 lines each time.
@@ -267,13 +257,12 @@ Used to create brand new files.
 
 ### 4. Modify Files
 
-To ensure the atomicity and accuracy of modifications, **direct use of `sed -i`
-for blind replacement is prohibited**. Please follow the "Read, then Write Diff, 
-then Patch" workflow:
+To ensure the atomicity and accuracy of modifications, you **must** follow the 
+"Read, then Write Diff, then Patch" workflow:
 
 1.  **Step 1: Read and analyze the file** (see the Read operations above).
 2.  **Step 2: Create a temporary patch file (Temp Diff)**.
-3.  **Step 3: Apply the modification using the `patch` command**.
+3.  **Step 3: Apply the modification using the `patch --dry-run && patch --no-backup-if-mismatch` command**.
 
 *   **Example: Modifying a section of code in `app.py`:**
 
@@ -291,12 +280,14 @@ file.
     +       print("Starting server on port 8080...")
             setup_database()
     EOF
-    patch --dry-run app.py $patchfile && patch app.py $patchfile
+    patch --dry-run app.py $patchfile && patch --no-backup-if-mismatch app.py $patchfile
     rm $patchfile
     </bash>
 
 **Note (Important):** Always perform a dry run before applying a patch to 
-prevent file corruption in case of errors.
+prevent file corruption in case of errors. When doing the real patch, use
+`--no-backup-if-mismatch` to avoid backup file. We assume the user is using git,
+so backup is unnessesary.
 
 ---
 
