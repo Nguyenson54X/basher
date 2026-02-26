@@ -10,6 +10,14 @@ To use Basher, ensure you have Python 3 installed along with the required depend
 pip install openai
 ```
 
+Also, Basher relies on these command line utils:
+
+- rg
+- fd
+- patch
+- cat
+
+
 ## Usage
 
 First, you can create an `AGENTS.md` as context file.
