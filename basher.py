@@ -48,12 +48,15 @@ def extract_bash_cmd(s):
     if len(matches) == 0:
         return (
             None,
-            "No executable bash commands found. Please provide a bash command. If you find the task has already been completed, please summarize what you have done and output <finish />.",
+            "No executable bash commands found. Please provide a bash command. "
+            "If you find the task has already been completed, please summarize "
+            "what you have done and output <finish />.",
         )
     elif len(matches) > 1:
         return (
             None,
-            "Only one script can be executed at a time. Please provide a single bash script block.",
+            "Only one script can be executed at a time. Please provide a single"
+            "bash script block.",
         )
     else:
         return matches[0].strip(), None
@@ -165,9 +168,11 @@ def main():
 
 def sys_prompt():
     return """
-You are an AI Agent capable of running bash commands within this environment to complete the tasks assigned to you by the user.
+You are an AI Agent capable of running bash commands within this environment to
+complete the tasks assigned to you by the user.
 
-The only tool you can call is bash. The bash scripts are wrapped in a `<bash>` `</bash>` block. For your each output, only one <bash> block can be give.
+The only tool you can call is bash. The bash scripts are wrapped in a `<bash>`
+`</bash>` block. For your each output, only one <bash> block can be give.
 
 here is a sample conversation.
 
@@ -175,31 +180,29 @@ here is a sample conversation.
 
 [User]: Please complete the task: (task content...)
 
-[Assistant]: To finish the task, I need to (thinking content...). \n Based on the analysis above, I now need to run the following command:
+[Assistant]: To finish the task, I need to (thinking content...). \n Based on
+the analysis above, I now need to run the following command:
 <bash>
 ping -c 4 google.com
 echo 'ping end'
 </bash>
 
-<|User|>: The bash return code is 0.
+[User]: Bash execution completed with return code: 0.
 
-stdin output:
-
-```
+==================================================
+STDOUT:
 xxxxx
-```
-
-stdout output:
-
-```
+========================= END OF STDOUT =========================
+STDERR:
 xxxxx
-```
+========================= END OF STDERR =========================
 
 What do we need to do next?
 
 </sample>
 
-Although there is only one tool, bash is versatile. You can find files, read files, write files, and modify files.
+Although there is only one tool, bash is versatile. You can find files, read
+files, write files, and modify files.
 
 ### 1. Find Files
 
@@ -217,10 +220,13 @@ Although there is only one tool, bash is versatile. You can find files, read fil
 
 **Note (Important):**
 
-The project scale may be very large; please **do not** use `find .` or global `grep` directly.
-Prioritize tools that automatically respect `.gitignore` (such as `fd` or `rg`).
-Unless there is a special requirement, **do not** use `fd -H` to list hidden files.
-When using `fd`, always use `--max-depth` or pipe the output to `head` to limit the output volume.
+- The project scale may be very large; please **do not** use `find .` or global
+`grep` directly.
+- Prioritize tools that automatically respect `.gitignore` (such as `fd` or `rg`).
+- Unless there is a special requirement, **do not** use `fd -H` to list hidden
+  files.
+- When using `fd`, always use `--max-depth` or pipe the output to `head` to limit
+  the output volume.
 
 ### 2. Read Files
 
@@ -255,7 +261,9 @@ Used to create brand new scripts or configuration files.
 
 ### 4. Modify Files
 
-To ensure the atomicity and accuracy of modifications, **direct use of `sed -i` for blind replacement is prohibited**. Please follow the "Read, then Write Diff, then Patch" workflow:
+To ensure the atomicity and accuracy of modifications, **direct use of `sed -i`
+for blind replacement is prohibited**. Please follow the "Read, then Write Diff, 
+then Patch" workflow:
 
 1.  **Step 1: Read and analyze the file** (see the Read operations above).
 2.  **Step 2: Create a temporary patch file (Temp Diff)**.
@@ -263,7 +271,8 @@ To ensure the atomicity and accuracy of modifications, **direct use of `sed -i` 
 
 *   **Example: Modifying a section of code in `app.py`:**
 
-Assuming we have already read the file, first write the difference to a temporary file `diff.patch`:
+Assuming we have already read the file, first write the difference to a temporary 
+file `diff.patch`:
 
     <bash>
     patchfile=$(mktemp)
@@ -282,7 +291,8 @@ Assuming we have already read the file, first write the difference to a temporar
 
 ---
 
-If you find that the task has been completed, please summarize what you have accomplished and output `<finish />`.
+If you find that the task has been completed, please summarize what you have 
+accomplished and output `<finish />`.
 """.strip()
 
 
