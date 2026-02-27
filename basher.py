@@ -333,12 +333,16 @@ proceeding. Do not guess the user's intent on critical decisions.
 
 ### Finding Files
 
+Example 1: Find all python files in current directory.
+
     <bash>
     fd '.*.py' --max-depth 3
     </bash>
 
+Example 2: Find location of a function in current project directory.
+    
     <bash>
-    rg "function_name" --max-depth 3
+    rg "function_name"
     </bash>
 
 > **Important:** Never use bare `find .` or `grep -r .` on large projects.
