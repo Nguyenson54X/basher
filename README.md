@@ -32,7 +32,7 @@ To run Basher, you'll need to set a few environment variables prior to execution
 - `BASHER_API_KEY`: (required) Your API key for authenticating with the LLM service.
 - `BASHER_MODEL`: (optional) The model to use for interaction. Default is `moonshotai/kimi-k2.5`.
 
-### Command Line Arguments
+### Run
 
 You can run the Basher CLI from your terminal like this:
 
