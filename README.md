@@ -14,9 +14,9 @@ Also, Basher relies on these command line utils:
 
 - rg
 - fd
-- patch
-- cat
+- ed
 
+Please make sure you have installed them.
 
 ## Usage
 

@@ -63,6 +63,58 @@ def extract_bash_cmd(s):
         return matches[0].strip(), None
 
 
+
+def wait_for_process(process, last_check_time, output_parts):
+    timeout_interval = 60
+    is_killed = False
+    return_code = None
+    while return_code is None:
+        time.sleep(1)
+        return_code = process.poll()
+
+        if return_code is None and time.time() - last_check_time >= timeout_interval:
+            with g_lock:
+                last_20_lines = "".join(output_parts[-20:])
+
+            question = (
+                f"The bash script has been running for {timeout_interval} seconds. "
+                f"Here is the last 20 lines of output:\n\n{last_20_lines}\n\n"
+                "Do you want to kill this process? "
+                "Reply with `<answer>YES</answer>` to kill it, or "
+                "`<answer>NO</answer>` to continue waiting for another 60 seconds, "
+                "with your reasons."
+            )
+            add_user_content(question)
+
+            while True:
+                ai_response = run_llm(g_ctx)
+                add_ai_content(ai_response)
+
+                has_yes = "<answer>YES</answer>" in ai_response
+                has_no = "<answer>NO</answer>" in ai_response
+
+                if has_yes and has_no:
+                    add_user_content("Invalid response: Both YES and NO found. "
+                                     "Please reply with `<answer>YES</answer>` to "
+                                     "kill the process or `<answer>NO</answer>` "
+                                     "to continue waiting, with your reaons.")
+                elif not has_yes and not has_no:
+                    add_user_content("Invalid response: Neither YES nor NO found. "
+                                     "Please reply with `<answer>YES</answer>` to "
+                                     "kill the process or `<answer>NO</answer>` "
+                                     "to continue waiting, with your reaons.")
+                elif has_yes:
+                    print("Process killed for timeout.", flush=True)
+                    is_killed = True
+                    process.kill()
+                    return_code = process.wait()
+                    break
+                else:
+                    last_check_time = time.time()
+                    break
+
+    return is_killed, return_code
+
 def run_bash(cmd):
     MAX_OUTPUT_LENGTH = 10000
 
@@ -72,8 +124,7 @@ def run_bash(cmd):
         f.write(cmd)
         temp_script_path = f.name
     start_time = time.time()
-    last_ai_check_time = start_time
-    timeout_interval = 60  # 60 seconds
+      # 60 seconds
 
     process = subprocess.Popen(
         ["bash", temp_script_path],
@@ -99,52 +150,7 @@ def run_bash(cmd):
     
     stdout_thread.start()
     stderr_thread.start()
-
-    is_killed = False
-    return_code = None
-    while return_code is None:
-        time.sleep(1)
-        return_code = process.poll()
-
-        if return_code is None and time.time() - last_ai_check_time >= timeout_interval:
-            with g_lock:
-                last_20_lines = "".join(output_parts[-20:])
-
-            question = (
-                f"The bash script has been running for {timeout_interval} seconds. "
-                f"Here is the last 20 lines of output:\n\n{last_20_lines}\n\n"
-                "Do you want to kill this process? "
-                "Reply with `<answer>YES</answer>` to kill it, or "
-                "`<answer>NO</answer>` to continue waiting for another 60 seconds."
-            )
-            add_user_content(question)
-
-            while True:
-                ai_response = run_llm(g_ctx)
-                add_ai_content(ai_response)
-
-                has_yes = "<answer>YES</answer>" in ai_response
-                has_no = "<answer>NO</answer>" in ai_response
-
-                if has_yes and has_no:
-                    add_user_content("Invalid response: Both YES and NO found. "
-                                     "Please reply with only `<answer>YES</answer>` "
-                                     "or `<answer>NO</answer>`.")
-                elif not has_yes and not has_no:
-                    add_user_content("Invalid response: Neither YES nor NO found. "
-                                     "Please reply with `<answer>YES</answer>` to "
-                                     "kill the process or `<answer>NO</answer>` "
-                                     "to continue waiting.")
-                elif has_yes:
-                    print("Process killed for timeout.", flush=True)
-                    is_killed = True
-                    process.kill()
-                    return_code = process.wait()
-                    break
-                else:
-                    last_ai_check_time = time.time()
-                    break
-
+    is_killed, return_code = wait_for_process(process, start_time, output_parts)
     stdout_thread.join()
     stderr_thread.join()
 
@@ -391,38 +397,55 @@ Used to create brand new files.
 
 ### 4. Modify Files
 
-To ensure the atomicity and accuracy of modifications, you **must** follow the
-"Read, then Write Diff, then Patch" workflow:
+To ensure the accuracy of modifications and avoid diff format issues, you 
+**must** use the `ed` command-line editor to modify files.
 
-1.  **Step 1: Read and analyze the file** (see the Read operations above).
-2.  **Step 2: Create a temporary patch file (Temp Diff)**.
-3.  **Step 3: Apply the modification using the `patch --dry-run && patch
-    --no-backup-if-mismatch` command**.
+**Workflow:**
+1. **Step 1:** Read the file with line numbers (e.g., `cat -n filename`) to 
+   get the EXACT line numbers you want to modify. See section 'Read Files'
+2. **Step 2:** Construct an `ed` script using a Here-Doc to replace, delete, 
+   or append lines based on those line numbers.
 
-*   **Example: Modifying a section of code in `app.py`:**
+*   **Example: Modifying a specific section of code in `app.py`:**
 
-Assuming we have already read the file, first write the difference to a temporary
-file.
+Assuming you have already read the file with `cat -n app.py` and found that the 
+code to be modified is on **lines 10 to 11**:
+```
+    10      def start():
+    11          print("Starting server on port 80...")
+```
+
+You must apply the change using the following `ed` command format:
 
     <bash>
-    patchfile=$(mktemp)
-    cat << 'EOF' > $patchfile
-    --- app.py
-    +++ app.py
-    @@ -10,5 +10,5 @@
+    ed -s app.py << 'EOF'
+    10,11c
         def start():
-    -       print("Starting server on port 80...")
-    +       print("Starting server on port 8080...")
-            setup_database()
+            print("Starting server on port 8080...")
+    .
+    w
+    q
     EOF
-    patch --dry-run app.py $patchfile && patch --no-backup-if-mismatch app.py $patchfile
-    rm $patchfile
     </bash>
 
-**Note (Important):** Always perform a dry run before applying a patch to
-prevent file corruption in case of errors. When doing the real patch, use
-`--no-backup-if-mismatch` to avoid backup file. We assume the user is using git,
-so backup is unnecessary.
+**Understanding the `ed` commands used:**
+*   `ed -s`: Runs `ed` silently.
+*   `10,11c`: **c**hanges lines 10 through 11. (Or use `<line>c` for a single 
+    line, e.g., `11c`).
+*   The lines following `c` are the new content.
+*   `.` (a single dot on its own line): **Crucial!** This terminates the input 
+    mode for the `c`, `a` (append), or `i` (insert) command.
+*   `w`: **w**rites the changes to the file.
+*   `q`: **q**uits `ed`.
+
+**Important Rules for using `ed`:**
+1.  Always use `'EOF'` (with quotes) to prevent bash variable expansion (like 
+    `$VAR`) inside your code block.
+2.  **Never forget the single dot (`.`)** on a new line to end the text input 
+    mode before sending `w` and `q`.
+3.  Pay close attention to indentation. The replacement text should match the 
+    indentation of the original code.
+
 
 ### Output Volume Control
 
