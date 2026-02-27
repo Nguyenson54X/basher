@@ -12,28 +12,30 @@ ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/"
 APIKEY = os.environ.get("BASHER_API_KEY")
 MODEL = os.environ.get("BASHER_MODEL", "moonshotai/kimi-k2.5")
 
-g_max_ctx_len = [-1]
+g_max_ctx_len = -1
 g_ctx = list()
 g_lock = threading.Lock()
 
 def max_ctx_len():
-    return g_max_ctx_len[0]
+    global g_max_ctx_len
+    return g_max_ctx_len
 
 def init_max_ctx_len():
+    global g_max_ctx_len
     client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
     try:
         models = client.models.list()
         for model in models:
             if model.id == MODEL:
                 if hasattr(model, 'context_length'):
-                    g_max_ctx_len[0] = model.context_length
+                    g_max_ctx_len = model.context_length
                 else:
                     # Try to get context_length from extra fields if available
                     if hasattr(model, 'model_extra') and 'context_length' in model.model_extra:
-                        g_max_ctx_len[0] = model.model_extra['context_length']
+                        g_max_ctx_len = model.model_extra['context_length']
                     else:
-                        print(f"Error: context_length not found for model {MODEL}")
-                        exit(-1)
+                        # model context length unknown, disable context compression
+                        g_max_ctx_len = -1
                 return
         print(f"Error: Model {MODEL} not found in the model list")
         exit(-1)
@@ -41,18 +43,47 @@ def init_max_ctx_len():
         print(f"Error: Failed to fetch model list: {e}")
         exit(-1)
 
-def run_llm(prompt):
+def compress_context():
+    """Compress the context when it gets too long by summarizing it."""
+    global g_ctx
+    if len(g_ctx) <= 2:
+        return
+    add_user_content("Now pause the work. Summarize the conversations above "
+                     "concisely, preserving all important information and "
+                     "context needed to continue the task.")
+    summary, _ = run_llm_raw(g_ctx)
+    
+    # Rebuild context: keep system prompt and first user message, add summary
+    new_ctx = []
+    new_ctx.append(g_ctx[0])
+    for i in range(1, len(g_ctx) - 1):
+        if g_ctx[i]["role"] != "user": break
+        new_ctx.append(g_ctx[i])
+    g_ctx = new_ctx
+    add_ai_content("The task has been running for a while. And the context is "
+                   "too long so it has been truncated. Here is a summary of "
+                   f"truncated context: \n\n{summary}")
+
+def run_llm_raw(prompt):
     client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
     response = client.chat.completions.create(model=MODEL, messages=prompt, stream=True)
     full_content = ""
+    usage = 0
     for chunk in response:
         if chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             print(content, end="", flush=True)
             full_content += content
+        if hasattr(chunk, 'usage') and chunk.usage:
+            usage = chunk.usage.total_tokens
     print(flush=True)
-    return full_content
+    return full_content, usage
 
+def run_llm(prompt):
+    res, usage = run_llm_raw(prompt)
+    if max_ctx_len() > 0 and usage > 0 and usage > 0.8 * max_ctx_len():
+        compress_context()
+    return res
 
 def add_user_content(content):
     g_ctx.append({"role": "user", "content": content})
@@ -84,8 +115,6 @@ def extract_bash_cmd(s):
         )
     else:
         return matches[0].strip(), None
-
-
 
 def wait_for_process(process, last_check_time, output_parts):
     timeout_interval = 60
@@ -120,12 +149,12 @@ def wait_for_process(process, last_check_time, output_parts):
                     add_user_content("Invalid response: Both YES and NO found. "
                                      "Please reply with `<answer>YES</answer>` to "
                                      "kill the process or `<answer>NO</answer>` "
-                                     "to continue waiting, with your reaons.")
+                                     "to continue waiting, with your reasons.")
                 elif not has_yes and not has_no:
                     add_user_content("Invalid response: Neither YES nor NO found. "
                                      "Please reply with `<answer>YES</answer>` to "
                                      "kill the process or `<answer>NO</answer>` "
-                                     "to continue waiting, with your reaons.")
+                                     "to continue waiting, with your reasons.")
                 elif has_yes:
                     print("Process killed for timeout.", flush=True)
                     is_killed = True
@@ -147,7 +176,6 @@ def run_bash(cmd):
         f.write(cmd)
         temp_script_path = f.name
     start_time = time.time()
-      # 60 seconds
 
     process = subprocess.Popen(
         ["bash", temp_script_path],
@@ -232,7 +260,6 @@ def main():
             res = run_bash(cmd)
             if res is not None:
                 add_user_content(res + "\n\nWhat do we need to do next?")
-
 
 def sys_prompt():
     return """
@@ -485,7 +512,6 @@ If you find that the task has been completed, please summarize what you have
 accomplished and output `<finish />`.
 
 """.strip()
-
 
 if __name__ == "__main__":
     main()
