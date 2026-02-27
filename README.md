@@ -1,6 +1,8 @@
 # Basher
 
-Basher is a CLI AI Agent that interacts with the OpenAI-compatible LLM API for executing coding tasks.
+Basher is a CLI AI Agent that interacts with OpenAI-compatible LLM API for executing coding tasks.
+
+The only tool Basher ever uses is Bash. Whether it’s finding, reading, or editing files, Basher always generates a small Bash script to get the job done.
 
 ## Installation
 
