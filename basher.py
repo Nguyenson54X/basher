@@ -401,14 +401,14 @@ To ensure the accuracy of modifications and avoid diff format issues, you
 **must** use the `ed` command-line editor to modify files.
 
 **Workflow:**
-1. **Step 1:** Read the file with line numbers (e.g., `cat -n filename`) to 
+1. **Step 1:** Read the file with line numbers (e.g., `cat -n filename | sed -n '100,200p'`) to 
    get the EXACT line numbers you want to modify. See section 'Read Files'
 2. **Step 2:** Construct an `ed` script using a Here-Doc to replace, delete, 
    or append lines based on those line numbers.
 
 *   **Example: Modifying a specific section of code in `app.py`:**
 
-Assuming you have already read the file with `cat -n app.py` and found that the 
+Assuming you have already read the file with `cat -n app.py | sed -n '1,100p'` and found that the 
 code to be modified is on **lines 10 to 11**:
 ```
     10      def start():
