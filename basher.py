@@ -12,10 +12,34 @@ ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/"
 APIKEY = os.environ.get("BASHER_API_KEY")
 MODEL = os.environ.get("BASHER_MODEL", "moonshotai/kimi-k2.5")
 
-g_prompts = dict()
+g_max_ctx_len = [-1]
 g_ctx = list()
 g_lock = threading.Lock()
 
+def max_ctx_len():
+    return g_max_ctx_len[0]
+
+def init_max_ctx_len():
+    client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
+    try:
+        models = client.models.list()
+        for model in models:
+            if model.id == MODEL:
+                if hasattr(model, 'context_length'):
+                    g_max_ctx_len[0] = model.context_length
+                else:
+                    # Try to get context_length from extra fields if available
+                    if hasattr(model, 'model_extra') and 'context_length' in model.model_extra:
+                        g_max_ctx_len[0] = model.model_extra['context_length']
+                    else:
+                        print(f"Error: context_length not found for model {MODEL}")
+                        exit(-1)
+                return
+        print(f"Error: Model {MODEL} not found in the model list")
+        exit(-1)
+    except Exception as e:
+        print(f"Error: Failed to fetch model list: {e}")
+        exit(-1)
 
 def run_llm(prompt):
     client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
@@ -26,7 +50,6 @@ def run_llm(prompt):
             content = chunk.choices[0].delta.content
             print(content, end="", flush=True)
             full_content += content
-
     print(flush=True)
     return full_content
 
@@ -181,6 +204,7 @@ def run_bash(cmd):
 
 
 def main():
+    init_max_ctx_len()
     add_sys_content(sys_prompt())
 
     agents_md_path = os.path.join(os.getcwd(), "AGENTS.md")
