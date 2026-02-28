@@ -469,7 +469,7 @@ Common `ed` operations:
     EOF
     </bash>
 
-### Controlling Output Volume
+## Controlling Output Volume
 
 - Pipe large outputs: `| head -n 50` or `| tail -n 50`.
 - For test results: `| tail -n 100` to see the summary.
