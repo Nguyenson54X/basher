@@ -6,17 +6,13 @@ The only tool Basher ever uses is Bash. Whether it’s finding, reading, or edit
 
 ## Installation
 
-To use Basher, ensure you have Python 3 installed along with the required dependencies. You can install the necessary packages using pip:
+To use Basher, ensure you have Python 3 installed. Basher only uses Python standard library. No other Python dependencies are required.
 
-```bash
-pip install openai
-```
+But Basher depends on these command line utils:
 
-Also, Basher relies on these command line utils:
-
-- rg
-- fd
-- ed
+- `rg`
+- `fd`
+- `ed`
 
 Please make sure you have installed them.
 

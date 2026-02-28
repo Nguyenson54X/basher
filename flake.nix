@@ -23,10 +23,6 @@
             setuptools
           ];
 
-          propagatedBuildInputs = with pkgs.python3Packages; [
-            openai
-          ];
-
           postInstall = ''
             mkdir -p $out/bin
             cp basher.py $out/bin/basher
@@ -43,9 +39,7 @@
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            (python3.withPackages (ps: with ps; [
-              openai
-            ]))
+            python3
           ];
         };
       }

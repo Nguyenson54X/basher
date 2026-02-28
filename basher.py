@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
+import json
 import re
 import time
 import subprocess
 import sys
 import tempfile
 import threading
-from openai import OpenAI
+import urllib.request
 
 ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/")
 APIKEY = os.environ.get("BASHER_API_KEY")
@@ -22,23 +23,20 @@ def max_ctx_len():
 
 def init_max_ctx_len():
     global g_max_ctx_len
-    client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
+    url = ENDPOINT.rstrip('/') + '/models'
+    headers = {
+        "Authorization": f"Bearer {APIKEY}"
+    }
+    req = urllib.request.Request(url, headers=headers, method='GET')
     try:
-        models = client.models.list()
-        for model in models:
-            if model.id == MODEL:
-                if hasattr(model, 'context_length'):
-                    g_max_ctx_len = model.context_length
-                else:
-                    # Try to get context_length from extra fields if available
-                    if hasattr(model, 'model_extra') and 'context_length' in model.model_extra:
-                        g_max_ctx_len = model.model_extra['context_length']
-                    else:
-                        # model context length unknown, disable context compression
-                        g_max_ctx_len = -1
-                return
-        print(f"Error: Model {MODEL} not found in the model list")
-        exit(-1)
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            for model in data.get('data', []):
+                if model.get('id') == MODEL:
+                    g_max_ctx_len = model.get('context_length', -1)
+                    return
+            print(f"Error: Model {MODEL} not found in the model list")
+            exit(-1)
     except Exception as e:
         print(f"Error: Failed to fetch model list: {e}")
         exit(-1)
@@ -65,17 +63,42 @@ def compress_context():
                    f"truncated context: \n\n{summary}")
 
 def run_llm_raw(prompt):
-    client = OpenAI(base_url=ENDPOINT, api_key=APIKEY)
-    response = client.chat.completions.create(model=MODEL, messages=prompt, stream=True)
+    url = ENDPOINT.rstrip('/') + '/chat/completions'
+    payload = {
+        "model": MODEL,
+        "messages": prompt,
+        "stream": True
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {APIKEY}"
+    }
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers=headers, method='POST')
     full_content = ""
     usage = 0
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            print(content, end="", flush=True)
-            full_content += content
-        if hasattr(chunk, 'usage') and chunk.usage:
-            usage = chunk.usage.total_tokens
+    # Send the request and handle streaming response
+    with urllib.request.urlopen(req) as response:
+        for line in response:
+            line = line.decode('utf-8').strip()
+            if not line or not line.startswith('data: '):
+                continue
+            data_str = line[6:]  # Remove 'data: ' prefix
+            if data_str == '[DONE]':
+                break
+            try:
+                chunk = json.loads(data_str)
+                delta = chunk.get('choices', [{}])[0].get('delta', {})
+                content = delta.get('content', '')
+                if content:
+                    print(content, end="", flush=True)
+                    full_content += content
+                
+                # Check for usage info in the chunk
+                if 'usage' in chunk and chunk['usage']:
+                    usage = chunk['usage'].get('total_tokens', 0)
+            except json.JSONDecodeError:
+                continue
     print(flush=True)
     return full_content, usage
 
