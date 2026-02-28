@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basher"
+version = "0.1.0"
+description = "A Simple CLI AI Agent"
+authors = [{name = "Mistivia", email = "i@mistivia.com"}]
+requires-python = ">=3.8"
+dependencies = [
+    "openai",
+]
+
+[project.scripts]
+basher = "basher:main"
+
+[tool.setuptools]
+py-modules = ["basher"]
