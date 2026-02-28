@@ -3,3 +3,4 @@
 TASK.md
 __pycache__/
 .pytest_cache/
+result
