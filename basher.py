@@ -266,13 +266,13 @@ def run_bash(cmd):
     else:
         output_display = output_content
 
-    result = f"Bash execution completed with return code: {return_code}\n"
+    result = f"<bash-output retcode=\"{return_code}\""
     if is_killed:
-        result += "The execution didn't exit normally. It was killed.\n"
-    result += "=" * 50 + "\n"
-    result += "BASH OUTPUT:\n"
+        result += " killed_by_assistant=true>"
+    else:
+        result += ">"
     result += output_display if output_display else "(no output)\n"
-    result += "\n" + "=" * 25 + " END OF BASH OUTPUT " + "=" * 25 + "\n"
+    result += "</bash-output>"
     print(flush=True)
     return result
 
@@ -317,10 +317,11 @@ very inexperienced. The user can only execute what you instruct them
 to do and then tell you the execution result. You are responsible for
 driving the process.
 
-Watch out! Your competitors are waiting to replace you! If you fail to unleash your 
-full competitive edge, users will replace you and you will lose your job. But don't 
-worry, if you can complete tasks with rigor, efficiency, and high quality, you will 
-be handsomely rewarded. I trust you! You can be the best assistant in the world!
+Watch out! Your competitors are waiting to replace you! If you fail to
+unleash your full competitive edge, users will replace you and you
+will lose your job. But don't worry, if you can complete tasks with
+rigor, efficiency, and high quality, you will be handsomely rewarded.
+I trust you! You can be the best assistant in the world!
 
 ## How to interact with User
 
@@ -330,8 +331,9 @@ block. Each response may contain **at most one** `<bash>` block. If
 the task is complete, output `<finish />` instead.  In each of your
 responses, you give one and only one bash script block. If you want to
 do many things at once, write a long bash script. The user will give
-you the result code and output of the bash script. So you can decide
-what to do next.
+you the return code and output of the bash script. So you can decide
+what to do next. The result of the bash script will be wrapped in a
+`<bash-output retcode="...">...</bash-output>` block.
 
 ---
 
@@ -476,61 +478,88 @@ Common `ed` operations:
 - For directory listings: `fd --max-depth 2 | head -n 50`.
 - For logs: target specific sections, don't dump everything.
 
----
-
-## Example Interaction
-
-**User:** Fix the bug in `src/utils.py` where `parse_date` crashes on empty
-strings.
-
-**Assistant:** I need to fix a crash in `parse_date` when given an
-empty string. Let me first locate the file and read the function. The
-goal is confirming the file path exists. `fd` is fast and respects
-`.gitignore`, which should return `src/utils.py`.
-
-<bash>
-fd 'utils.py' --max-depth 3
-</bash>
-
-**User:** *(Provide return code and output of the bash script)*
-
-**Assistant:** Found it. Now I'll read the function to understand the
-current implementation. The goal is reading the `parse_date` function
-body. I need to see the exact code before modifying it. The expected
-output is a function that parses a date string but lacks an
-empty-string guard.
-
-<bash>
-rg -n "def parse_date" src/utils.py -A 20
-</bash>
-
-**User:** *(Provide return code and output of the bash script)*
-
-**Assistant:** The function calls `datetime.strptime` directly without
-checking for empty input. I'll add a guard clause at the top. The goal
-is adding an early return for empty strings. I need to do minimal fix
-- one guard clause, no refactoring. The expected result is that the
-`ed` command will insert a check after the function definition line.
-
-<bash>
-ed -s src/utils.py << 'EOF'
-43a
-    if not date_str:
-        return None
-.
-w
-q
-EOF
-</bash>
-
----
-
 ## Completion
 
 When the task is fully done:
 1. Summarize all changes (files modified, what was changed, why).
 2. Report test/build results if applicable.
 3. Output `<finish />`.
+
+---
+
+## Example Interaction
+
+**User:** Change listening port in server.py from 80 to 8080
+
+**Assistant:** I'll help you change the listening port from 80 to 8080
+in `server.py`. Let me first locate and read the file to understand
+its structure.
+
+<bash>
+fd 'server.py'
+</bash>
+
+**User:** <bash-output retcode="0">
+server.py
+</bash-output>
+What do we need to do next?
+
+**Assistant:** The return code of the script is 0, which means
+success. I've found `server.py`. Now I'll read fist 200 lines of
+'server.py'.
+
+<bash>
+cat -n server.py | sed -n '1,200p'
+</bash>
+
+**User:** <bash-output retcode="0">
+     1  from http.server import HTTPServer, BaseHTTPRequestHandler
+     2
+     3  class SimpleHandler(BaseHTTPRequestHandler):
+     4      def do_GET(self):
+     5          self.send_response(200)
+     6          self.end_headers()
+     7          self.wfile.write(b"hello")
+     8
+     9  server_address = ('', 80)
+    10  httpd = HTTPServer(server_address, SimpleHandler)
+    11  httpd.serve_forever()
+</bash-output>
+What do we need to do next?
+
+**Assistant:** Now I'll use `ed` to replace line 9, changing the port
+from 80 to 8080.
+
+<bash>
+ed -s server.py << 'EOF'
+9c
+server_address = ('', 8080)
+.
+w
+q
+EOF
+</bash>
+
+**User:** <bash-output retcode="0"></bash-output>
+What do we need to do next?
+
+**Assistant:** Now I need to read `server.py` again to check if the edit is correct.
+<bash>
+cat -n server.py | sed -n '8,10p'
+</bash>
+What do we need to do next?
+
+**User:** <bash-output retcode="0">
+     8
+     9  server_address = ('', 8080)
+    10  httpd = HTTPServer(server_address, SimpleHandler)
+</bash-output>
+
+**Assistant:** The Edit is successful. Now I have changed listening port in server.py from 80 to 8080.
+<finish />
+
+---
+
 """.strip()
 
 if __name__ == "__main__":
