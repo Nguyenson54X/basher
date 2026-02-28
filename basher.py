@@ -63,6 +63,18 @@ def compress_context():
                    f"truncated context: \n\n{summary}")
 
 def run_llm_raw(prompt):
+    err = None
+    for _ in range(3):
+        try:
+            return req_llm_service(prompt)
+        except Exception as e:
+            err = e
+            continue
+    print(err)
+    sys.exit(-1)
+    
+
+def req_llm_service(prompt):
     url = ENDPOINT.rstrip('/') + '/chat/completions'
     payload = {
         "model": MODEL,
@@ -222,12 +234,22 @@ def run_bash(cmd):
     stderr_thread = threading.Thread(
         target=read_stream, args=(process.stderr,)
     )
-    
+
     stdout_thread.start()
     stderr_thread.start()
     is_killed, return_code = wait_for_process(process, start_time, output_parts)
-    stdout_thread.join()
-    stderr_thread.join()
+
+    if is_killed:
+        try:
+            process.stdout.close()
+        except Exception as _:
+            pass
+        try:
+            process.stderr.close()
+        except Exception as _:
+            pass
+    stdout_thread.join(timeout=5)
+    stderr_thread.join(timeout=5)
 
     try:
         os.unlink(temp_script_path)
