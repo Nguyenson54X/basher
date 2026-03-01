@@ -7,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import select
 import urllib.request
 
 ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/")
@@ -16,7 +15,6 @@ MODEL = os.environ.get("BASHER_MODEL", "moonshotai/kimi-k2.5")
 
 g_max_ctx_len = -1
 g_ctx = list()
-g_lock = threading.Lock()
 
 def max_ctx_len():
     global g_max_ctx_len
@@ -142,18 +140,16 @@ def extract_bash_cmd(s):
             None,
             "No executable bash commands found. Please provide a bash command. "
             "If you find the task has already been completed, please summarize "
-            "what you have done and output <finish />.",
-        )
+            "what you have done and output <finish />.")
     elif len(matches) > 1:
         return (
             None,
             "Only one script can be executed at a time. Please provide a single "
-            "bash script block.",
-        )
+            "bash script block.")
     else:
         return matches[0].strip(), None
 
-def wait_for_process(process, start_time, output_parts):
+def wait_for_process(process, start_time, output_parts, lock):
     last_check_time = start_time
     timeout_interval = 60
     is_killed = False
@@ -161,9 +157,8 @@ def wait_for_process(process, start_time, output_parts):
     while return_code is None:
         time.sleep(1)
         return_code = process.poll()
-
         if return_code is None and time.time() - last_check_time >= timeout_interval:
-            with g_lock:
+            with lock:
                 last_20_lines = "".join(output_parts[-20:])
 
             question = (
@@ -172,8 +167,7 @@ def wait_for_process(process, start_time, output_parts):
                 "Do you want to kill this process? "
                 "Reply with `<answer>YES</answer>` to kill it, or "
                 "`<answer>NO</answer>` to continue waiting for another 60 seconds, "
-                "with your reasons."
-            )
+                "with your reasons.")
             add_user_content(question)
 
             while True:
@@ -197,13 +191,27 @@ def wait_for_process(process, start_time, output_parts):
                     print("Process killed for timeout.", flush=True)
                     is_killed = True
                     process.kill()
-                    return_code = process.wait()
+                    return_code = process.wait(timeout=5)
                     break
                 else:
                     last_check_time = time.time()
                     break
 
     return is_killed, return_code
+
+def read_stream(stream, lock, output_parts):
+    try:
+        for line in stream:
+            with lock:
+                output_parts.append(line)
+                print(line, end="", flush=True)
+    except Exception:
+        pass
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
 
 def run_bash(cmd):
     MAX_OUTPUT_LENGTH = 10000
@@ -219,44 +227,19 @@ def run_bash(cmd):
         ["bash", temp_script_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-    )
+        text=True,)
 
     output_parts = []
-
-    quit = False
-    def read_stream(stream):
-        import fcntl
-        nonlocal quit
-        fd = stream.fileno()
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-        poll = select.poll()
-        poll.register(stream.fileno(), select.POLLIN)
-        while not quit:
-            events = poll.poll(1000)  # 1s timeout
-            if events:
-                try:
-                    line = stream.readline()
-                    if line:
-                        with g_lock:
-                            output_parts.append(line)
-                            print(line, flush=True, end="")
-                except IOError:
-                    pass
-        stream.close()
+    lock = threading.Lock()
 
     stdout_thread = threading.Thread(
-        target=read_stream, args=(process.stdout,)
-    )
+        target=read_stream, args=(process.stdout, lock, output_parts))
     stderr_thread = threading.Thread(
-        target=read_stream, args=(process.stderr,)
-    )
-
+        target=read_stream, args=(process.stderr, lock, output_parts))
     stdout_thread.start()
     stderr_thread.start()
-    is_killed, return_code = wait_for_process(process, start_time, output_parts)
-    quit = True
+    is_killed, return_code = \
+        wait_for_process(process, start_time, output_parts, lock)
     stdout_thread.join(timeout=5)
     stderr_thread.join(timeout=5)
 
@@ -265,7 +248,7 @@ def run_bash(cmd):
     except Exception as _:
         pass
 
-    with g_lock:
+    with lock:
         output_content = "".join(output_parts)
     if len(output_content) > MAX_OUTPUT_LENGTH:
         output_display = (
