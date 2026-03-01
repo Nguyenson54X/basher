@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import select
 import urllib.request
 
 ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/")
@@ -222,11 +223,27 @@ def run_bash(cmd):
     )
 
     output_parts = []
+
+    quit = False
     def read_stream(stream):
-        for line in stream:
-            with g_lock:
-                output_parts.append(line)
-                print(line, flush=True, end="")
+        import fcntl
+        nonlocal quit
+        fd = stream.fileno()
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        poll = select.poll()
+        poll.register(stream.fileno(), select.POLLIN)
+        while not quit:
+            events = poll.poll(1000)  # 1s timeout
+            if events:
+                try:
+                    line = stream.readline()
+                    if line:
+                        with g_lock:
+                            output_parts.append(line)
+                            print(line, flush=True, end="")
+                except IOError:
+                    pass
         stream.close()
 
     stdout_thread = threading.Thread(
@@ -239,22 +256,13 @@ def run_bash(cmd):
     stdout_thread.start()
     stderr_thread.start()
     is_killed, return_code = wait_for_process(process, start_time, output_parts)
-
-    if is_killed:
-        try:
-            process.stdout.close()
-        except Exception as _:
-            pass
-        try:
-            process.stderr.close()
-        except Exception as _:
-            pass
+    quit = True
     stdout_thread.join(timeout=5)
     stderr_thread.join(timeout=5)
 
     try:
         os.unlink(temp_script_path)
-    except OSError:
+    except Exception as _:
         pass
 
     with g_lock:
@@ -430,24 +438,43 @@ Example of reading lines 100–200 with line numbers:
 
 ### Modifying Files
 
-To ensure precise, reproducible edits, **always** use `patch`:
+To ensure precise, reproducible edits, **always** use a small **Python script**
+to modify files by replacing an exact `old` code snippet with a `new` code snippet.
 
-1. First, read the file with line numbers to identify what to modify.
-2. Then apply changes with an unified diff and `patch` it;
-3. If the patch failed, read again and retry.
+**Rules (mandatory):**
 
-Example:
+1. First, **read the file** (with line numbers) to confirm the exact content.
+2. Then write a Python script that:
+   - reads the whole file as text;
+   - verifies the `old` snippet exists (and ideally occurs **exactly once**);
+   - replaces `old` → `new`;
+   - writes the file back **only if** replacement succeeded.
+3. If the `old` snippet appears multiple times, **do not** replace blindly.
+   Either:
+   - refine `old` to be more specific, or
+   - replace a specific occurrence with extra context, or
+   - implement a targeted edit (e.g., by line range / AST) with clear justification.
+4. If the script fails (old not found / too many matches), **stop and re-read**
+   the file to adjust the snippet.
+
+**Example (single exact replacement + context preview):**
 
     <bash>
-    patch --no-backup-if-mismatch << 'EOF'
-    --- file
-    +++ file
-    @@ -1,3 +1,3 @@
-     Context line (exactly as in file)
-    -Old line
-    +New line
-     Context line (exactly as in file)
-    EOF
+    python3 - << 'PYEOF'
+    from pathlib import Path
+    path = Path("path/to/file.py")
+    old = """'"""'"""OLD_CODE_HERE
+"""'"""'"""
+    new = """'"""'"""NEW_CODE_HERE
+"""'"""'"""
+    text = path.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"Expected old snippet to appear exactly once, found {count}")
+    idx = text.index(old)
+    updated = text.replace(old, new)
+    path.write_text(updated, encoding="utf-8")
+    PYEOF
     </bash>
 
 if you messed up the file and don't know what to do, try to use "git restore 
@@ -519,25 +546,29 @@ cat -n server.py | sed -n '1,200p'
 </bash-output>
 What do we need to do next?
 
-**Assistant:** Now I'll use `patch` to edit line 9, changing the port
+**Assistant:** Now I'll use a small python script to edit line 9, changing the port
 from 80 to 8080.
 
 <bash>
-patch --no-backup-if-mismatch << 'EOF'
---- server.py
-+++ server.py
-@@ -7,4 +7,4 @@
-         self.wfile.write(b"hello")
-  
--server_address = ('', 80)
-+server_address = ('', 8080)
- httpd = HTTPServer(server_address, SimpleHandler)
-EOF
+python3 - << 'PYEOF'
+from pathlib import Path
+path = Path("server.py")
+old = """'"""'"""server_address = ('', 80)
+"""'"""'"""
+new = """'"""'"""server_address = ('', 8080)
+"""'"""'"""
+text = path.read_text(encoding="utf-8")
+count = text.count(old)
+if count != 1:
+    raise SystemExit(f"Expected old snippet to appear exactly once, found {count}")
+idx = text.index(old)
+updated = text.replace(old, new)
+path.write_text(updated, encoding="utf-8")
+print("Edit successful.")
+PYEOF
 </bash>
 
-**User:** <bash-output retcode="0">
-patching file server.py
-Hunk #1 succeeded at 7 with fuzz 1.
+**User:** <bash-output retcode="0">Edit successful.
 </bash-output>
 What do we need to do next?
 
