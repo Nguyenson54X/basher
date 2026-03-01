@@ -70,6 +70,7 @@ def run_llm_raw(prompt):
         except Exception as e:
             err = e
             continue
+    print("LLM service failed after 3 retries: ")
     print(err)
     sys.exit(-1)
     
@@ -297,7 +298,7 @@ def main():
         res = run_llm(g_ctx)
         print(flush=True)
         if "<finish />" in res:
-            exit(0)
+            sys.exit(0)
         cmd, err = extract_bash_cmd(res)
         add_ai_content(res)
         if err is not None:
@@ -412,7 +413,6 @@ Example 2: Find location of a function in current project directory.
 Example of reading lines 100–200 with line numbers:
 
     <bash>
-
     cat -n path/to/file | sed -n '100,200p'
     </bash>
 
@@ -428,42 +428,34 @@ Example of reading lines 100–200 with line numbers:
     EOF
     </bash>
 
-### Modifying Files (use `ed`)
+### Modifying Files
 
-To ensure precise, reproducible edits, **always** use `ed`:
+To ensure precise, reproducible edits, **always** use `patch`:
 
-1. First, read the file with line numbers to identify exact line ranges;
-2. Then apply changes with an `ed` script;
-3. Read the file again to ensure the edit is correct.
+1. First, read the file with line numbers to identify what to modify.
+2. Then apply changes with an unified diff and `patch` it;
+3. If the patch failed, read again and retry.
+
+Example:
 
     <bash>
-    ed -s path/to/file.py << 'EOF'
-    10,12c
-        def start(port=8080):
-            print(f"Starting server on port {port}...")
-    .
-    w
-    q
+    patch --no-backup-if-mismatch << 'EOF'
+    --- file
+    +++ file
+    @@ -1,3 +1,3 @@
+     Context line (exactly as in file)
+    -Old line
+    +New line
+     Context line (exactly as in file)
     EOF
     </bash>
 
-**`ed` rules:**
-
-1. Always quote the heredoc delimiter (`'EOF'`) to prevent shell
-   expansion.
-2. Always end input mode with a single `.` on its own line before `w`
-   and `q`.
-3. Match the original indentation exactly.
-
-Common `ed` operations:
-| Command   | Meaning                              |
-|-----------|--------------------------------------|
-| `Na`      | **a**ppend after line N              |
-| `Ni`      | **i**nsert before line N             |
-| `N,Mc`    | **c**hange (replace) lines N–M       |
-| `N,Md`    | **d**elete lines N–M                 |
+if you messed up the file and don't know what to do, try to use "git restore 
+<file>..." to recover by discarding changes.
 
 ### Appending to Files
+
+Example:
 
     <bash>
     cat << 'EOF' >> existing_file.txt
@@ -527,33 +519,39 @@ cat -n server.py | sed -n '1,200p'
 </bash-output>
 What do we need to do next?
 
-**Assistant:** Now I'll use `ed` to replace line 9, changing the port
+**Assistant:** Now I'll use `patch` to edit line 9, changing the port
 from 80 to 8080.
 
 <bash>
-ed -s server.py << 'EOF'
-9c
-server_address = ('', 8080)
-.
-w
-q
+patch --no-backup-if-mismatch << 'EOF'
+--- server.py
++++ server.py
+@@ -7,4 +7,4 @@
+         self.wfile.write(b"hello")
+  
+-server_address = ('', 80)
++server_address = ('', 8080)
+ httpd = HTTPServer(server_address, SimpleHandler)
 EOF
 </bash>
 
-**User:** <bash-output retcode="0"></bash-output>
+**User:** <bash-output retcode="0">
+patching file server.py
+Hunk #1 succeeded at 7 with fuzz 1.
+</bash-output>
 What do we need to do next?
 
 **Assistant:** Now I need to read `server.py` again to check if the edit is correct.
 <bash>
 cat -n server.py | sed -n '8,10p'
 </bash>
-What do we need to do next?
 
 **User:** <bash-output retcode="0">
      8
      9  server_address = ('', 8080)
     10  httpd = HTTPServer(server_address, SimpleHandler)
 </bash-output>
+What do we need to do next?
 
 **Assistant:** The Edit is successful. Now I have changed listening port in server.py from 80 to 8080.
 <finish />

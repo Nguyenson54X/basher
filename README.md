@@ -12,7 +12,7 @@ But Basher depends on these command line utils:
 
 - `rg`
 - `fd`
-- `ed`
+- `patch`
 
 Please make sure you have installed them.
 
