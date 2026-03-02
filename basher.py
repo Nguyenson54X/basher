@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import urllib.request
+import traceback
 
 ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "").strip()
 APIKEY = os.environ.get("BASHER_API_KEY", "").strip()
@@ -74,11 +75,10 @@ def run_llm_raw(prompt):
     for _ in range(3):
         try:
             return req_llm_service(prompt)
-        except Exception as e:
-            err = e
+        except Exception:
+            traceback.print_exc()
             continue
-    print("LLM service failed after 3 retries: ")
-    print(err)
+    print("LLM service failed after 3 retries.")
     sys.exit(-1)
     
 
@@ -108,7 +108,10 @@ def req_llm_service(prompt):
                 break
             try:
                 chunk = json.loads(data_str)
-                delta = chunk.get('choices', [{}])[0].get('delta', {})
+                choices = chunk.get('choices', [])
+                if len(choices) == 0:
+                    continue
+                delta = choices[0].get('delta', {})
                 content = delta.get('content', '')
                 if content:
                     print(content, end="", flush=True)
