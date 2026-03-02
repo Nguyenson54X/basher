@@ -7,3 +7,5 @@ result
 .inputrc
 .Xauthority
 .bashrc
+.direnv/
+tags
