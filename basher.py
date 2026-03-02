@@ -9,15 +9,15 @@ import tempfile
 import threading
 import urllib.request
 
-ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "https://openrouter.ai/api/v1/").strip()
+ENDPOINT = os.environ.get("BASHER_API_ENDPOINT", "").strip()
 APIKEY = os.environ.get("BASHER_API_KEY", "").strip()
-MODEL = os.environ.get("BASHER_MODEL", "moonshotai/kimi-k2.5").strip()
+MODEL = os.environ.get("BASHER_MODEL", "").strip()
 
-if len(APIKEY) == 0:
+if len(APIKEY) == 0 or len(ENDPOINT) == 0 or len(MODEL) == 0:
     print("Error: API key is not set. Please set the following environment variables:")
-    print("  - BASHER_API_KEY (required): Your API key for the LLM service")
-    print("  - BASHER_API_ENDPOINT (optional): The API endpoint URL (default: https://openrouter.ai/api/v1/)")
-    print("  - BASHER_MODEL (optional): The model to use (default: moonshotai/kimi-k2.5)")
+    print("  - BASHER_API_KEY: Your API key for the LLM service")
+    print("  - BASHER_API_ENDPOINT: The API endpoint URL (e.g. https://openrouter.ai/api/v1/)")
+    print("  - BASHER_MODEL: The model to use (e.g. moonshotai/kimi-k2.5)")
     sys.exit(-1)
 
 

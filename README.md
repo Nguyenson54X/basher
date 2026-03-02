@@ -23,9 +23,9 @@ To run Basher, you'll need to set a few environment variables prior to execution
 
 ### Environment Variables
 
-- `BASHER_API_ENDPOINT`: (optional) The API endpoint for the OpenAI-compatible LLM service. Default is `https://openrouter.ai/api/v1/`.
-- `BASHER_API_KEY`: (required) Your API key for authenticating with the LLM service.
-- `BASHER_MODEL`: (optional) The model to use for interaction. Default is `moonshotai/kimi-k2.5`.
+- `BASHER_API_ENDPOINT`: The API endpoint for the OpenAI-compatible LLM service. e.g. `https://openrouter.ai/api/v1/`.
+- `BASHER_API_KEY`: Your API key for authenticating with the LLM service.
+- `BASHER_MODEL`: The model to use for interaction. e.g. `moonshotai/kimi-k2.5`.
 
 ### Run
 
