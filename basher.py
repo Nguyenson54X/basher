@@ -317,7 +317,7 @@ def main():
         else:
             bash_result, new_res = run_bash(cmd)
             if bash_result is not None:
-                add_user_content(res + "\n\nWhat do we need to do next?")
+                add_user_content(bash_result + "\n\nWhat do we need to do next?")
             else:
                 res = new_res
 
