@@ -165,6 +165,7 @@ def wait_for_process(process, start_time, output_parts, lock):
     timeout_interval = 60
     is_killed = False
     return_code = None
+    res = None
     while return_code is None:
         time.sleep(1)
         return_code = process.poll()
@@ -203,12 +204,14 @@ def wait_for_process(process, start_time, output_parts, lock):
                     is_killed = True
                     process.kill()
                     return_code = process.wait(timeout=5)
+                    if "<bash>" in ai_response or "<finish>" in ai_response:
+                        res = ai_response
                     break
                 else:
                     last_check_time = time.time()
                     break
 
-    return is_killed, return_code
+    return is_killed, return_code, res
 
 def read_stream(stream, lock, output_parts):
     try:
@@ -249,7 +252,7 @@ def run_bash(cmd):
         target=read_stream, args=(process.stderr, lock, output_parts))
     stdout_thread.start()
     stderr_thread.start()
-    is_killed, return_code = \
+    is_killed, return_code, res = \
         wait_for_process(process, start_time, output_parts, lock)
     stdout_thread.join(timeout=5)
     stderr_thread.join(timeout=5)
@@ -277,7 +280,10 @@ def run_bash(cmd):
     result += output_display if output_display else "(no output)\n"
     result += "</bash-output>"
     print(flush=True)
-    return result
+    if res is None:
+        return result, None
+    else:
+        return None, res
 
 
 def main():
@@ -296,19 +302,24 @@ def main():
         sys.exit(1)
 
     add_user_content(" ".join(sys.argv[1:]))
+    res = ""
     while True:
-        res = run_llm(g_ctx)
+        if len(res) == 0:
+            res = run_llm(g_ctx)
         print(flush=True)
         if "<finish />" in res:
             sys.exit(0)
         cmd, err = extract_bash_cmd(res)
         add_ai_content(res)
+        res = ""
         if err is not None:
             add_user_content("Format error: " + err)
         else:
-            res = run_bash(cmd)
-            if res is not None:
+            bash_result, new_res = run_bash(cmd)
+            if bash_result is not None:
                 add_user_content(res + "\n\nWhat do we need to do next?")
+            else:
+                res = new_res
 
 def sys_prompt():
     return """
