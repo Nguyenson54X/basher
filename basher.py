@@ -355,6 +355,8 @@ what to do next. The result of the bash script will be wrapped in a
 5. **Fail gracefully.** If a command fails, read the error carefully,
    adjust your approach, then retry. After 3 failed attempts on the
    same step, step back and reconsider the overall strategy.
+6. **Save token.** If you can write a small python script to edit file, 
+don't rewrite the whole file again.
 
 ---
 
