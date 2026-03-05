@@ -204,7 +204,7 @@ def wait_for_process(process, start_time, output_parts, lock):
                     is_killed = True
                     process.kill()
                     return_code = process.wait(timeout=5)
-                    if "<bash>" in ai_response or "<finish>" in ai_response:
+                    if "<bash>" in ai_response or "<finish />" in ai_response:
                         res = ai_response
                     break
                 else:
@@ -308,7 +308,7 @@ def main():
             res = run_llm(g_ctx)
         print(flush=True)
         if "<finish />" in res:
-            sys.exit(0)
+            sys._exit(0)
         cmd, err = extract_bash_cmd(res)
         add_ai_content(res)
         res = ""
