@@ -287,6 +287,11 @@ def run_bash(cmd):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(line_buffering=True)
+
     init_max_ctx_len()
     add_sys_content(sys_prompt())
 
