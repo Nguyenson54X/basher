@@ -132,11 +132,11 @@ def run_llm(prompt):
     return res
 
 def add_user_content(content):
-    g_ctx.append({"role": "user", "content": content})
+    g_ctx.append({"role": "user", "name": "Intern", "content": content})
 
 
 def add_ai_content(content):
-    g_ctx.append({"role": "assistant", "content": content})
+    g_ctx.append({"role": "assistant", "name": "Senior Software Engineer", "content": content})
 
 
 def add_sys_content(content):
